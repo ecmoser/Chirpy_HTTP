@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 	"sync/atomic"
 )
 
@@ -35,6 +37,19 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(data)
+}
+
+func cleanChirp(chirp string) string {
+	dirty_words := []string{"kerfuffle", "sharbert", "fornax"}
+	clean_chirp := ""
+	for word := range strings.SplitSeq(chirp, " ") {
+		if slices.Contains(dirty_words, strings.ToLower(word)) {
+			clean_chirp += "**** "
+		} else {
+			clean_chirp += word + " "
+		}
+	}
+	return strings.TrimSpace(clean_chirp)
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +91,8 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 		respondWithError(w, 400, "Chirp is too long")
 		return
 	}
-	respondWithJSON(w, 200, map[string]any{"valid": true})
+	clean_chirp := cleanChirp(rBody.Body)
+	respondWithJSON(w, 200, map[string]any{"valid": true, "cleaned_body": clean_chirp})
 }
 
 func main() {
