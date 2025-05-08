@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +17,24 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 		cfg.fileserverHits.Add(1)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(fmt.Appendf(nil, `{"error": "%s"}`, msg))
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %v", err)
+		respondWithError(w, 500, "Internal server error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(data)
 }
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +61,24 @@ func handlerHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		Body string `json:"body"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	rBody := requestBody{}
+	err := decoder.Decode(&rBody)
+	if err != nil {
+		respondWithError(w, 500, "Error decoding request body")
+		return
+	}
+	if len(rBody.Body) > 140 {
+		respondWithError(w, 400, "Chirp is too long")
+		return
+	}
+	respondWithJSON(w, 200, map[string]any{"valid": true})
+}
+
 func main() {
 	const filepathRoot = "./app/"
 	const port = "8080"
@@ -51,6 +88,7 @@ func main() {
 
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
 	mux.HandleFunc("GET /api/healthz", handlerHealthz)
+	mux.HandleFunc("POST /api/validate_chirp", apiCfg.handlerValidateChirp)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 
