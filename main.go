@@ -1,14 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
 
+	"github.com/ecmoser/Chirpy_HTTP/internal/database"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -100,6 +103,13 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 
 func main() {
 	godotenv.Load()
+
+	db_url := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", db_url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dbQueries := database.New(db)
 
 	const filepathRoot = "./app/"
 	const port = "8080"
