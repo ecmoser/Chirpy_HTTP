@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
@@ -96,6 +99,8 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 }
 
 func main() {
+	godotenv.Load()
+
 	const filepathRoot = "./app/"
 	const port = "8080"
 	apiCfg := apiConfig{}
