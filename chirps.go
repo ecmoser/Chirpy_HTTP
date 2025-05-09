@@ -5,17 +5,30 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/ecmoser/Chirpy_HTTP/internal/database"
+	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
-	type requestBody struct {
-		Body string `json:"body"`
+type chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
+	type request struct {
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
 	}
 	decoder := json.NewDecoder(r.Body)
-	rBody := requestBody{}
+	rBody := request{}
 	err := decoder.Decode(&rBody)
 	if err != nil {
-		respondWithError(w, 500, "Error decoding request body")
+		respondWithError(w, 400, "Invalid request body")
 		return
 	}
 	if len(rBody.Body) > 140 {
@@ -23,7 +36,59 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	clean_chirp := cleanChirp(rBody.Body)
-	respondWithJSON(w, 200, map[string]any{"valid": true, "cleaned_body": clean_chirp})
+	rawChirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   clean_chirp,
+		UserID: rBody.UserID,
+	})
+	if err != nil {
+		respondWithError(w, 500, "Couldn't create chirp")
+		return
+	}
+	c := chirp{
+		ID:        rawChirp.ID,
+		CreatedAt: rawChirp.CreatedAt,
+		UpdatedAt: rawChirp.UpdatedAt,
+		Body:      rawChirp.Body,
+		UserID:    rawChirp.UserID,
+	}
+	respondWithJSON(w, 201, c)
+}
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	rawChirps, err := cfg.dbQueries.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, 500, "Couldn't get chirps")
+		return
+	}
+	chirps := []chirp{}
+	for _, rawChirp := range rawChirps {
+		c := chirp{
+			ID:        rawChirp.ID,
+			CreatedAt: rawChirp.CreatedAt,
+			UpdatedAt: rawChirp.UpdatedAt,
+			Body:      rawChirp.Body,
+			UserID:    rawChirp.UserID,
+		}
+		chirps = append(chirps, c)
+	}
+	respondWithJSON(w, 200, chirps)
+}
+
+func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	rawChirp, err := cfg.dbQueries.GetChirpByID(r.Context(), uuid.MustParse(id))
+	if err != nil {
+		respondWithError(w, 404, "Chirp not found")
+		return
+	}
+	c := chirp{
+		ID:        rawChirp.ID,
+		CreatedAt: rawChirp.CreatedAt,
+		UpdatedAt: rawChirp.UpdatedAt,
+		Body:      rawChirp.Body,
+		UserID:    rawChirp.UserID,
+	}
+	respondWithJSON(w, 200, c)
 }
 
 func cleanChirp(chirp string) string {
