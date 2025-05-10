@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -81,5 +82,28 @@ func TestExpiredToken(t *testing.T) {
 	}
 	if parsedUserID != uuid.Nil {
 		t.Fatalf("Expected user ID %v, got %v", uuid.Nil, parsedUserID)
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer token")
+	token, err := GetBearerToken(headers)
+	if err != nil {
+		t.Fatalf("Error getting bearer token: %v", err)
+	}
+	if token != "token" {
+		t.Fatalf("Expected token %v, got %v", "token", token)
+	}
+}
+
+func TestGetBearerTokenMissingHeader(t *testing.T) {
+	headers := http.Header{}
+	_, err := GetBearerToken(headers)
+	if err == nil {
+		t.Fatalf("Expected error for missing header, got nil")
+	}
+	if err.Error() != "no authorization header found" {
+		t.Fatalf("Expected error message %v, got %v", "no authorization header found", err.Error())
 	}
 }

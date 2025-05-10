@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
-	"time"
 
 	"github.com/ecmoser/Chirpy_HTTP/internal/database"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -20,13 +18,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
 	platform       string
-}
-
-type user struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	tokenSecret    string
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -60,8 +52,9 @@ func main() {
 	const filepathRoot = "./app/"
 	const port = "8080"
 	apiCfg := apiConfig{
-		dbQueries: dbQueries,
-		platform:  os.Getenv("PLATFORM"),
+		dbQueries:   dbQueries,
+		platform:    os.Getenv("PLATFORM"),
+		tokenSecret: os.Getenv("TOKEN_SECRET"),
 	}
 
 	mux := http.NewServeMux()

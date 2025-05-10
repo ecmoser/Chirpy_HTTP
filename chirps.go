@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	auth "github.com/ecmoser/Chirpy_HTTP/internal/auth"
 	"github.com/ecmoser/Chirpy_HTTP/internal/database"
 	"github.com/google/uuid"
 )
@@ -21,12 +22,22 @@ type chirp struct {
 
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type request struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
+	}
+	headers := r.Header
+	token, err := auth.GetBearerToken(headers)
+	if err != nil {
+		respondWithError(w, 500, "Error getting bearer token")
+		return
+	}
+	userID, err := auth.ValidateJWT(token, cfg.tokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Error validating JWT: "+err.Error())
+		return
 	}
 	decoder := json.NewDecoder(r.Body)
 	rBody := request{}
-	err := decoder.Decode(&rBody)
+	err = decoder.Decode(&rBody)
 	if err != nil {
 		respondWithError(w, 400, "Invalid request body")
 		return
@@ -38,7 +49,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 	clean_chirp := cleanChirp(rBody.Body)
 	rawChirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   clean_chirp,
-		UserID: rBody.UserID,
+		UserID: userID,
 	})
 	if err != nil {
 		respondWithError(w, 500, "Couldn't create chirp")
