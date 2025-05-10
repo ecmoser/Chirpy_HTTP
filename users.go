@@ -11,11 +11,12 @@ import (
 )
 
 type user struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	AccessToken  string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) {
@@ -70,9 +71,8 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
-		Email     string `json:"email"`
-		Password  string `json:"password"`
-		ExpiresIn int    `json:"expires_in_seconds"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	rBody := requestBody{}
@@ -80,9 +80,6 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, 400, "Error decoding request body")
 		return
-	}
-	if rBody.ExpiresIn == 0 || rBody.ExpiresIn > 3600 {
-		rBody.ExpiresIn = 3600
 	}
 	userPassword, err := cfg.dbQueries.GetUserPassword(r.Context(), rBody.Email)
 	if err != nil || auth.CheckPasswordHash(userPassword, rBody.Password) != nil {
@@ -94,17 +91,72 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 401, "Invalid email or password")
 		return
 	}
-	token, err := auth.MakeJWT(dbUser.ID, cfg.tokenSecret, time.Duration(rBody.ExpiresIn)*time.Second)
+	token, err := auth.MakeJWT(dbUser.ID, cfg.tokenSecret, time.Duration(1)*time.Hour)
 	if err != nil {
 		respondWithError(w, 500, "Error creating JWT")
 		return
 	}
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, 500, "Error creating refresh token")
+		return
+	}
+	_, err = cfg.dbQueries.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:  refreshToken,
+		UserID: dbUser.ID,
+	})
+	if err != nil {
+		respondWithError(w, 500, "Error saving refresh token")
+		return
+	}
 	u := user{
-		ID:        dbUser.ID,
-		CreatedAt: dbUser.CreatedAt,
-		UpdatedAt: dbUser.UpdatedAt,
-		Email:     dbUser.Email,
-		Token:     token,
+		ID:           dbUser.ID,
+		CreatedAt:    dbUser.CreatedAt,
+		UpdatedAt:    dbUser.UpdatedAt,
+		Email:        dbUser.Email,
+		AccessToken:  token,
+		RefreshToken: refreshToken,
 	}
 	respondWithJSON(w, 200, u)
+}
+
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	response := struct {
+		Token string `json:"token"`
+	}{
+		Token: "",
+	}
+	rHeader := r.Header
+	token, err := auth.GetBearerToken(rHeader)
+	if err != nil {
+		respondWithError(w, 401, "No token found in header")
+		return
+	}
+	userID, err := cfg.dbQueries.GetUserFromRefreshToken(r.Context(), token)
+	if err != nil {
+		respondWithError(w, 401, "Invalid refresh token")
+		return
+	}
+	accessToken, err := auth.MakeJWT(userID, cfg.tokenSecret, time.Duration(1)*time.Hour)
+	if err != nil {
+		respondWithError(w, 500, "Error creating access token")
+		return
+	}
+	response.Token = accessToken
+	respondWithJSON(w, 200, response)
+}
+
+func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.Request) {
+	rHeader := r.Header
+	token, err := auth.GetBearerToken(rHeader)
+	if err != nil {
+		respondWithError(w, 401, "No token found in header")
+		return
+	}
+	err = cfg.dbQueries.RevokeRefreshToken(r.Context(), token)
+	if err != nil {
+		respondWithError(w, 500, "Error revoking refresh token: ")
+		return
+	}
+	w.WriteHeader(204)
 }
