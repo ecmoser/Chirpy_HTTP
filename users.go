@@ -160,3 +160,53 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.R
 	}
 	w.WriteHeader(204)
 }
+
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	header := r.Header
+	token, err := auth.GetBearerToken(header)
+	if err != nil {
+		respondWithError(w, 401, "No token found in header")
+		return
+	}
+	userID, err := auth.ValidateJWT(token, cfg.tokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Invalid token")
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	rBody := requestBody{}
+	err = decoder.Decode(&rBody)
+	if err != nil {
+		respondWithError(w, 400, "Error decoding request body")
+		return
+	}
+	hashed, err := auth.HashPassword(rBody.Password)
+	if err != nil {
+		respondWithError(w, 400, "Error hashing password")
+		return
+	}
+	dbUser, err := cfg.dbQueries.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:       userID,
+		Email:    rBody.Email,
+		Password: hashed,
+	})
+	if err != nil {
+		respondWithError(w, 500, "Error updating user")
+		return
+	}
+	respondWithJSON(w, 200, struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+	}{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	})
+}
