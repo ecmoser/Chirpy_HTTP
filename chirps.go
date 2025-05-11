@@ -102,6 +102,35 @@ func (cfg *apiConfig) handlerGetChirpByID(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, 200, c)
 }
 
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	chirpID := r.PathValue("id")
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, 401, "No token found in header")
+		return
+	}
+	userID, err := auth.ValidateJWT(token, cfg.tokenSecret)
+	if err != nil {
+		respondWithError(w, 401, "Invalid token")
+		return
+	}
+	chirp, err := cfg.dbQueries.GetChirpByID(r.Context(), uuid.MustParse(chirpID))
+	if err != nil {
+		respondWithError(w, 404, "Chirp not found")
+		return
+	}
+	if chirp.UserID != userID {
+		respondWithError(w, 403, "You are not allowed to delete this chirp")
+		return
+	}
+	err = cfg.dbQueries.DeleteChirp(r.Context(), uuid.MustParse(chirpID))
+	if err != nil {
+		respondWithError(w, 500, "Couldn't delete chirp")
+		return
+	}
+	w.WriteHeader(204)
+}
+
 func cleanChirp(chirp string) string {
 	dirty_words := []string{"kerfuffle", "sharbert", "fornax"}
 	clean_chirp := ""
