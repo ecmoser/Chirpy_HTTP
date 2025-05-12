@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	auth "github.com/ecmoser/Chirpy_HTTP/internal/auth"
 	"github.com/google/uuid"
 )
 
@@ -19,6 +20,15 @@ func (cfg *apiConfig) handlerPolkaWebhook(w http.ResponseWriter, r *http.Request
 	err := decoder.Decode(&requestBody)
 	if err != nil {
 		respondWithError(w, 400, "Error decoding request body")
+		return
+	}
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, 401, err.Error())
+		return
+	}
+	if apiKey != cfg.polkaApiKey {
+		respondWithError(w, 401, "Invalid API key")
 		return
 	}
 	if requestBody.Event != "user.upgraded" {

@@ -19,6 +19,7 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	platform       string
 	tokenSecret    string
+	polkaApiKey    string
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -55,6 +56,7 @@ func main() {
 		dbQueries:   dbQueries,
 		platform:    os.Getenv("PLATFORM"),
 		tokenSecret: os.Getenv("TOKEN_SECRET"),
+		polkaApiKey: os.Getenv("POLKA_KEY"),
 	}
 
 	mux := http.NewServeMux()
