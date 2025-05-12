@@ -35,6 +35,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 401, "Error validating JWT: "+err.Error())
 		return
 	}
+	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	rBody := request{}
 	err = decoder.Decode(&rBody)

@@ -24,6 +24,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
+	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	rBody := requestBody{}
 	err := decoder.Decode(&rBody)
@@ -74,6 +75,7 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
+	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	rBody := requestBody{}
 	err := decoder.Decode(&rBody)
@@ -155,7 +157,7 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.R
 	}
 	err = cfg.dbQueries.RevokeRefreshToken(r.Context(), token)
 	if err != nil {
-		respondWithError(w, 500, "Error revoking refresh token: ")
+		respondWithError(w, 500, "Error revoking refresh token")
 		return
 	}
 	w.WriteHeader(204)
@@ -177,6 +179,7 @@ func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) 
 		respondWithError(w, 401, "Invalid token")
 		return
 	}
+	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	rBody := requestBody{}
 	err = decoder.Decode(&rBody)
